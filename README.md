@@ -73,5 +73,4 @@ python simulate_recorded_workload.py
 ## Требования
 - Python 3.6+
 - `requests`, `BeautifulSoup`, `pymysql`, `pymssql`, `json`
-- База данных Postgres
 
