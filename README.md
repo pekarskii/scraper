@@ -1,0 +1,77 @@
+# Car Ads Scraper
+
+Этот проект представляет собой набор скриптов для поиска и парсинга объявлений о продаже автомобилей на различных платформах, таких как [av.by](https://cars.av.by) и [cars.com](https://www.cars.com). Данные сохраняются в базу данных (MySQL или MS SQL) для дальнейшего анализа.
+
+## Функциональность
+
+Проект включает в себя два основных модуля:
+1. **Finder** — поиск ссылок на объявления с авто-площадок.
+2. **Scraper** — сбор информации с объявлений, найденных с помощью Finder.
+
+Дополнительно есть модуль для симуляции нагрузки на базу данных.
+
+## Структура файлов
+
+- `cards_finder_av_by_mssql.py` - поиск объявлений на av.by, сохранение в MS SQL.
+- `cards_finder_cars_com.py` - поиск объявлений на cars.com, сохранение в MySQL.
+- `cards_finder_cars_com_mssql.py` - поиск объявлений на cars.com, сохранение в MS SQL.
+- `cards_scrapper_av_by_mssql.py` - парсинг данных об автомобилях с av.by, сохранение в MS SQL.
+- `cards_scrapper_cars_com.py` - парсинг данных об автомобилях с cars.com, сохранение в MySQL.
+- `cards_scrapper_cars_com_mssql.py` - парсинг данных об автомобилях с cars.com, сохранение в MS SQL.
+- `simulate_recorded_workload.py` - скрипт для симуляции нагрузки на MySQL на основе логов медленных запросов.
+
+## Установка и запуск
+
+### 1. Установка зависимостей
+
+Перед запуском убедитесь, что у вас установлен Python 3 и необходимые библиотеки:
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Конфигурация
+
+Создайте файл `config.json` в корневой директории и укажите параметры подключения к базам данных:
+
+```json
+{
+    "mssql_audit_db": {
+        "server": "your_server",
+        "user": "your_user",
+        "password": "your_password",
+        "database": "your_db"
+    },
+    "audit_db": {
+        "host": "your_host",
+        "user": "your_user",
+        "password": "your_password",
+        "database": "your_db"
+    }
+}
+```
+
+### 3. Запуск
+
+Для поиска объявлений используйте:
+```bash
+python cards_finder_av_by_mssql.py
+python cards_finder_cars_com.py
+```
+
+Для парсинга данных:
+```bash
+python cards_scrapper_av_by_mssql.py
+python cards_scrapper_cars_com.py
+```
+
+Для тестирования нагрузки:
+```bash
+python simulate_recorded_workload.py
+```
+
+## Требования
+- Python 3.6+
+- `requests`, `BeautifulSoup`, `pymysql`, `pymssql`, `json`
+- База данных Postgres
+
