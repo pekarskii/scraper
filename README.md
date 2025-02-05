@@ -4,7 +4,6 @@
 
 ![image](https://github.com/user-attachments/assets/a5253b8b-8d4b-483f-aaa5-07909d52477d)
 
-
 ## Функциональность
 
 Проект включает в себя два основных модуля:
