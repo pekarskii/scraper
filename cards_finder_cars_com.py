@@ -20,7 +20,7 @@ headers.update({
 })
 
 DEFAULT_HEADER = headers
-SOURCE_ID = "https://www.cars.com"
+SOURCE_ID = "https://www.cars.com" # изменить
 PROCESS_DESC = "cards_finder_cars_com.py"
 
 
