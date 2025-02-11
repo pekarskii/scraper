@@ -5,10 +5,12 @@ import json
 import time
 import logging
 
+# Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 start_time = time.time()
 
+# Заголовки для HTTP-запросов (имитируют браузер)
 headers = requests.utils.default_headers()
 headers.update({
     'Accept-Encoding': 'gzip, deflate, sdch',
@@ -25,11 +27,15 @@ SOURCE_ID = "https://www.cars.com"
 PROCESS_DESC = "cards_finder_cars_com.py"
 
 def get_card_url_list(url, site_url=SOURCE_ID, headers=DEFAULT_HEADER):
+    """Функция для получения списка URL карточек автомобилей."""
     url_list = []
     try:
+        # Отправка HTTP-запроса к сайту
         page = requests.get(url, headers=headers, timeout=10)
         page.raise_for_status()
+        # Разбор HTML-кода страницы
         soup = BeautifulSoup(page.text, "html.parser")
+        # Поиск блоков с объявлениями
         listing_items = soup.find_all("div", class_="vehicle-card")
         for item in listing_items:
             link = item.find("a", class_="image-gallery-link")
@@ -42,6 +48,7 @@ def get_card_url_list(url, site_url=SOURCE_ID, headers=DEFAULT_HEADER):
     return url_list
 
 def init_db_connection(con, sql_script_path):
+    """Функция для инициализации базы данных из SQL-скрипта."""
     try:
         if sql_script_path:
             cur = con.cursor()
@@ -56,19 +63,24 @@ def init_db_connection(con, sql_script_path):
         return -1
 
 def main():
+    """Основная логика скрипта."""
     try:
+        # Чтение конфигурационного файла
         with open("config.json") as config_file:
             configs = json.load(config_file)
+        # Подключение к базе данных
         con = pymysql.connect(**configs["audit_db"], autocommit=True)
     except Exception as e:
         logging.error(f"Ошибка подключения к БД: {e}")
         return
     
+    # Инициализация базы данных
     if init_db_connection(con, configs.get("finder_init_db_script")) == -1:
         return
     
     try:
         with con.cursor() as cur:
+            # Логирование процесса
             cur.execute(
                 f"""
                     INSERT INTO process_log(process_desc, user, host, connection_id)         
@@ -87,6 +99,7 @@ def main():
             num_searches = 0
             num_combinations = (curr_year - 1900) * 50 * 500
             
+            # Перебор различных параметров поиска (год, цена, номер страницы)
             for year in range(curr_year, 1900, -1):
                 for price_usd in range(0, 500001, 10000):
                     for page_num in range(1, 501):
@@ -98,6 +111,7 @@ def main():
                             num_searches += 500 - page_num
                             break
                         
+                        # Вставка данных в таблицу ad_groups
                         cur.execute(
                             f"""
                                 INSERT INTO ad_groups(price_min, page_size, year, page_num, process_log_id)
@@ -107,6 +121,7 @@ def main():
                         cur.execute("SELECT LAST_INSERT_ID();")
                         ad_group_id = cur.fetchone()[0]
                         
+                        # Обработка карточек объявлений
                         for card_url in card_url_list:
                             try:
                                 cur.execute(
@@ -129,6 +144,7 @@ def main():
                             except pymysql.MySQLError as e:
                                 logging.error(f"Ошибка при вставке данных в БД: {e}")
                         
+                        # Логирование прогресса
                         logging.info(f"time: {time.strftime('%X', time.gmtime(time.time() - start_time))}, ads inserted: {num_ads_inserted}, combination #: {num_searches}, progress: {round(num_searches/num_combinations*100, 2):5}%, search url: {group_url}")
                         
                         if len(card_url_list) < page_size:
@@ -136,6 +152,7 @@ def main():
                             break
         
             logging.info(f"end time (GMT): {time.strftime('%X', time.gmtime())}")
+            # Завершение логирования процесса
             cur.execute(
                 f"""
                     UPDATE process_log 
