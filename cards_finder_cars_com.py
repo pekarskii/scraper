@@ -1,13 +1,17 @@
 import pymysql
-
 from bs4 import BeautifulSoup
 import requests
 import json
 import time
+import logging
 
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 start_time = time.time()
 
+# Заголовки для HTTP-запросов (имитируют браузер)
 headers = requests.utils.default_headers()
 headers.update({
     'Accept-Encoding': 'gzip, deflate, sdch',
@@ -20,152 +24,147 @@ headers.update({
 })
 
 DEFAULT_HEADER = headers
-SOURCE_ID = "https://www.cars.com" # изменить
+SOURCE_ID = "https://www.cars.com"
 PROCESS_DESC = "cards_finder_cars_com.py"
 
-
 def get_card_url_list(url, site_url=SOURCE_ID, headers=DEFAULT_HEADER):
+    """Функция для получения списка URL карточек автомобилей."""
     url_list = []
-
-    page = requests.get(url, headers=headers)
-    if page.status_code == 200:
+    try:
+        # Отправка HTTP-запроса к сайту
+        page = requests.get(url, headers=headers, timeout=10)
+        page.raise_for_status()
+        # Разбор HTML-кода страницы
         soup = BeautifulSoup(page.text, "html.parser")
-
+        # Поиск блоков с объявлениями
         listing_items = soup.find_all("div", class_="vehicle-card")
-        try:
-            for item in listing_items:
-                item_href = item.find("a", class_="image-gallery-link")["href"]
-                url_list.append(site_url + item_href)
-        except:
-            pass
-
+        for item in listing_items:
+            link = item.find("a", class_="image-gallery-link")
+            if link and link.get("href"):
+                url_list.append(site_url + link["href"])
+    except requests.RequestException as e:
+        logging.error(f"Ошибка при запросе {url}: {e}")
+    except Exception as e:
+        logging.error(f"Ошибка парсинга страницы {url}: {e}")
     return url_list
 
-
 def init_db_connection(con, sql_script_path):
-    result_code = 0
-
-    if sql_script_path is not None:
-        cur = con.cursor()
-        with open(sql_script_path) as init_db_file:
-            for sql_stmt in init_db_file.read().split(";"):
-                try:
-                    cur.execute(sql_stmt)
-                except:
-                    result_code = -1
-
-    return result_code
-
+    """Функция для инициализации базы данных из SQL-скрипта."""
+    try:
+        if sql_script_path:
+            cur = con.cursor()
+            with open(sql_script_path) as init_db_file:
+                for sql_stmt in init_db_file.read().split(";"):
+                    if sql_stmt.strip():
+                        cur.execute(sql_stmt)
+            con.commit()
+        return 0
+    except Exception as e:
+        logging.error(f"Ошибка инициализации БД: {e}")
+        return -1
 
 def main():
-    with open("config.json") as config_file:
-        configs = json.load(config_file)
-
-    con = pymysql.connect(**configs["audit_db"])
-
-    init_db_connection(con, configs.get("finder_init_db_script"))
-
-    with con:
-        cur = con.cursor()
-
-        cur.execute(
-            f"""
-                insert into process_log(process_desc, user, host, connection_id)         
-                select '{PROCESS_DESC}', 
-                       user, 
-                       host,
-                       connection_id()
-                from information_schema.processlist
-                where id = connection_id();
-            """
-        )
-        cur.execute("select last_insert_id() as process_log_id;")
-        process_log_id = cur.fetchone()[0]
-
-        curr_year = int(time.strftime("%Y", time.gmtime()))
-        page_size = 20
-
-        num_ads_inserted = 0
-        num_searches = 0
-        num_combinations = (curr_year - 1900) * 50 * 500
-        for year in range(curr_year, 1900, -1):
-            for price_usd in range(0, 500001, 10000):
-                for page_num in range(1, 501):
-                    num_searches += 1
-
-                    group_url = f"{SOURCE_ID}/shopping/results/?list_price_max={price_usd + 9999}&list_price_min={price_usd}&maximum_distance=all&page_size={page_size}&page={page_num}&stock_type=used&year_max={year}&year_min={year}&zip=60606"
-
-                    card_url_list = get_card_url_list(group_url)
-                    if card_url_list == []:
-                        print(f"time: {time.strftime('%X', time.gmtime(time.time() - start_time))}, no cards found")
-                        num_searches += 500 - page_num
-                        break
-
-                    cur.execute(
-                        f"""
-                            insert into ad_groups(price_min, page_size, year, page_num, process_log_id)
-                            values({price_usd}, {page_size}, {year}, {page_num}, {process_log_id});
-                        """
-                    )
-                    cur.execute("select last_insert_id() as ad_group_id;")
-                    ad_group_id = cur.fetchone()[0]
-
-                    for card_url in card_url_list:
+    """Основная логика скрипта."""
+    try:
+        # Чтение конфигурационного файла
+        with open("config.json") as config_file:
+            configs = json.load(config_file)
+        # Подключение к базе данных
+        con = pymysql.connect(**configs["audit_db"], autocommit=True)
+    except Exception as e:
+        logging.error(f"Ошибка подключения к БД: {e}")
+        return
+    
+    # Инициализация базы данных
+    if init_db_connection(con, configs.get("finder_init_db_script")) == -1:
+        return
+    
+    try:
+        with con.cursor() as cur:
+            # Логирование процесса
+            cur.execute(
+                f"""
+                    INSERT INTO process_log(process_desc, user, host, connection_id)         
+                    SELECT '{PROCESS_DESC}', user, host, connection_id()
+                    FROM information_schema.processlist
+                    WHERE id = connection_id();
+                """
+            )
+            cur.execute("SELECT LAST_INSERT_ID();")
+            process_log_id = cur.fetchone()[0]
+            
+            curr_year = int(time.strftime("%Y", time.gmtime()))
+            page_size = 20
+            
+            num_ads_inserted = 0
+            num_searches = 0
+            num_combinations = (curr_year - 1900) * 50 * 500
+            
+            # Перебор различных параметров поиска (год, цена, номер страницы)
+            for year in range(curr_year, 1900, -1):
+                for price_usd in range(0, 500001, 10000):
+                    for page_num in range(1, 501):
+                        num_searches += 1
+                        group_url = f"{SOURCE_ID}/shopping/results/?list_price_max={price_usd + 9999}&list_price_min={price_usd}&maximum_distance=all&page_size={page_size}&page={page_num}&stock_type=used&year_max={year}&year_min={year}&zip=60606"
+                        card_url_list = get_card_url_list(group_url)
+                        if not card_url_list:
+                            logging.info(f"{time.strftime('%X', time.gmtime(time.time() - start_time))}, no cards found")
+                            num_searches += 500 - page_num
+                            break
+                        
+                        # Вставка данных в таблицу ad_groups
                         cur.execute(
                             f"""
-                                insert into ads(source_id, card_url)
-                                with cte_new_card
-                                as
-                                ( 
-                                    select '{card_url[len(SOURCE_ID):]}' as card_url
-                                )
-                                select '{SOURCE_ID}' as source_id, 
-                                       card_url
-                                from cte_new_card
-                                where card_url not in (select card_url from ads where source_id='{SOURCE_ID}');
+                                INSERT INTO ad_groups(price_min, page_size, year, page_num, process_log_id)
+                                VALUES({price_usd}, {page_size}, {year}, {page_num}, {process_log_id});
                             """
                         )
-
-                        if cur.rowcount == 0:
-                            continue
-
-                        num_ads_inserted += cur.rowcount
-
-                        # make more detailed copy of the record in ads_archive table. link it with ads using ads_id
-                        cur.execute(
-                            f"""
-                                insert into ads_archive(ads_id, source_id, card_url, ad_group_id, process_log_id)
-                                with cte_new_card
-                                as
-                                ( 
-                                    select '{card_url[len(SOURCE_ID):]}' as card_url
+                        cur.execute("SELECT LAST_INSERT_ID();")
+                        ad_group_id = cur.fetchone()[0]
+                        
+                        # Обработка карточек объявлений
+                        for card_url in card_url_list:
+                            try:
+                                cur.execute(
+                                    f"""
+                                        INSERT INTO ads(source_id, card_url)
+                                        SELECT '{SOURCE_ID}', '{card_url[len(SOURCE_ID):]}'
+                                        WHERE NOT EXISTS (
+                                            SELECT 1 FROM ads WHERE source_id='{SOURCE_ID}' AND card_url='{card_url[len(SOURCE_ID):]}'
+                                        );
+                                    """
                                 )
-                                select last_insert_id() as ads_id,
-                                       '{SOURCE_ID}' as source_id, 
-                                       card_url,
-                                       {ad_group_id} as ad_group_id, 
-                                       {process_log_id} as process_log_id
-                                from cte_new_card;
-                            """
-                        )
-
-                    print(f"\ntime: {time.strftime('%X', time.gmtime(time.time() - start_time))}, ads inserted: {num_ads_inserted}, combination #: {num_searches}, progress: {round(num_searches/num_combinations*100, 2):5}%, search url: {group_url}")
-
-                    if len(card_url_list) < page_size:
-                        num_searches += 500 - page_num
-                        break
-
-        print(f"\nend time (GMT): {time.strftime('%X', time.gmtime())}")
-
-        cur.execute(
-            f"""
-                update process_log 
-                    set end_date = current_timestamp 
-                where process_log_id = {process_log_id};
-            """
-        )
-
+                                if cur.rowcount > 0:
+                                    num_ads_inserted += cur.rowcount
+                                    cur.execute(
+                                        f"""
+                                            INSERT INTO ads_archive(ads_id, source_id, card_url, ad_group_id, process_log_id)
+                                            VALUES (LAST_INSERT_ID(), '{SOURCE_ID}', '{card_url[len(SOURCE_ID):]}', {ad_group_id}, {process_log_id});
+                                        """
+                                    )
+                            except pymysql.MySQLError as e:
+                                logging.error(f"Ошибка при вставке данных в БД: {e}")
+                        
+                        # Логирование прогресса
+                        logging.info(f"time: {time.strftime('%X', time.gmtime(time.time() - start_time))}, ads inserted: {num_ads_inserted}, combination #: {num_searches}, progress: {round(num_searches/num_combinations*100, 2):5}%, search url: {group_url}")
+                        
+                        if len(card_url_list) < page_size:
+                            num_searches += 500 - page_num
+                            break
+        
+            logging.info(f"end time (GMT): {time.strftime('%X', time.gmtime())}")
+            # Завершение логирования процесса
+            cur.execute(
+                f"""
+                    UPDATE process_log 
+                    SET end_date = CURRENT_TIMESTAMP 
+                    WHERE process_log_id = {process_log_id};
+                """
+            )
+    except Exception as e:
+        logging.error(f"Ошибка в основном процессе: {e}")
+    finally:
+        con.close()
 
 if __name__ == "__main__":
     main()
-
