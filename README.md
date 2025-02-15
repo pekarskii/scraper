@@ -12,8 +12,6 @@
 
 ![image](https://github.com/user-attachments/assets/6bee24ca-8440-41f4-ad7c-5e780f71a0cd)
 
-
-
 Дополнительно есть модуль для симуляции нагрузки на базу данных.
 
 ## Структура файлов
