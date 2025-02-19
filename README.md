@@ -79,3 +79,7 @@ python simulate_recorded_workload.py
 - Python 3.6+
 - `requests`, `BeautifulSoup`, `pymysql`, `pymssql`, `json`, `pandas`
 
+
+![image](https://github.com/user-attachments/assets/b69d0f87-2a9c-4b0e-a835-c59a706124a5)
+
+
