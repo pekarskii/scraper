@@ -78,11 +78,3 @@ python simulate_recorded_workload.py
 ## Требования
 - Python 3.6+
 - `requests`, `BeautifulSoup`, `pymysql`, `pymssql`, `json`, `pandas`
-
-
-![image](https://github.com/user-attachments/assets/b69d0f87-2a9c-4b0e-a835-c59a706124a5)
-![image](https://www.dailydoseofds.com/content/images/2024/11/Screen-Recording-2024-11-02-at-10.52.10-PM.gif)
-![image](https://github.com/user-attachments/assets/37027c01-c661-4846-8949-6c61ffbf4a0d)
-
-
-
