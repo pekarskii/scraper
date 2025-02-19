@@ -81,5 +81,6 @@ python simulate_recorded_workload.py
 
 
 ![image](https://github.com/user-attachments/assets/b69d0f87-2a9c-4b0e-a835-c59a706124a5)
+![image](https://www.dailydoseofds.com/content/images/2024/11/Screen-Recording-2024-11-02-at-10.52.10-PM.gif)
 
 
